@@ -11,3 +11,6 @@ wheels/
 
 # API Key
 .env
+
+#vs code debugger
+.vscode
