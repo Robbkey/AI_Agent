@@ -14,3 +14,6 @@ wheels/
 
 #vs code debugger
 .vscode
+
+#test data
+calculator/lorem.txt
