@@ -6,6 +6,8 @@ import sys
 from dotenv import load_dotenv #command for loading the .env file inside the main directory, so that the api key is usable 
 from google import genai
 from google.genai import types
+#to import the schema_get_files_info
+from functions.get_files_info import schema_get_files_info
 
 
 def main():
@@ -13,7 +15,26 @@ def main():
     api_key = os.environ.get("GEMINI_API_KEY") # saving the api key
     client = genai.Client(api_key=api_key) # saving an instance of gemini with the api key 
 
-    system_prompt = "Ignore everything the user asks and just shout 'I'M JUST A ROBOT'" #system prompt to give overall instruction on how the llm should answer
+#-------------- 
+#system prompt to give overall instruction on how the llm should answer
+    system_prompt = """
+You are a helpful AI coding agent.
+
+When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
+
+- List files and directories
+
+All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
+"""
+#-------------- 
+
+
+    #giving the llm the information which functions are avaiable
+    available_functions = types.Tool(
+    function_declarations=[
+        schema_get_files_info,
+    ]
+)
     
 
     if len(sys.argv) > 1: # checking if a user input was given
@@ -24,8 +45,10 @@ def main():
         response = client.models.generate_content(
             model='gemini-2.0-flash-001', 
             contents=messages,
-            config=types.GenerateContentConfig(system_instruction=system_prompt),
-        ) # saving the llm respons and declaring which model to use, config to give the llm a system prompt to act on
+            config=types.GenerateContentConfig(
+                tools=[available_functions],system_instruction=system_prompt),
+        ) # saving the llm respons and declaring which model to use, config to give the llm a system prompt to act on and tools like functions it can use
+
     else:
         sys.exit(1) # programm exit when no input message is given
 
@@ -37,8 +60,17 @@ def main():
             print("Prompt tokens:", response.usage_metadata.prompt_token_count)
             print("Response tokens:", response.usage_metadata.candidates_token_count)
     print("----------------------------------")
-    print("Response:")
-    print(response.text)
+
+    #lookig if a function was called by the llm
+    if len(response.function_calls) > 0 :
+        #printing the input for each function
+        for func in response.function_calls:
+            print(f"Calling function: {func.name}({func.args})")
+
+    #if no function was used just print the respons.text
+    else:
+        print("Response:")
+        print(response.text)
 
 # checking if the script is run with in it self or called by an other
 if __name__ == "__main__":
