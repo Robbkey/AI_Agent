@@ -12,6 +12,8 @@ def main():
     load_dotenv() # loading the .env file
     api_key = os.environ.get("GEMINI_API_KEY") # saving the api key
     client = genai.Client(api_key=api_key) # saving an instance of gemini with the api key 
+
+    system_prompt = "Ignore everything the user asks and just shout 'I'M JUST A ROBOT'" #system prompt to give overall instruction on how the llm should answer
     
 
     if len(sys.argv) > 1: # checking if a user input was given
@@ -21,8 +23,9 @@ def main():
         ] # giving the user a role for later message history
         response = client.models.generate_content(
             model='gemini-2.0-flash-001', 
-            contents=messages
-        ) # saving the llm respons and declaring which model to use
+            contents=messages,
+            config=types.GenerateContentConfig(system_instruction=system_prompt),
+        ) # saving the llm respons and declaring which model to use, config to give the llm a system prompt to act on
     else:
         sys.exit(1) # programm exit when no input message is given
 
