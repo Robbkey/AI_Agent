@@ -1,7 +1,23 @@
 import os
 from functions.config import CHARACTER_LIMIT
+from google.genai import types
 
-def get_files_content(working_directory, file):
+#chapter 3 lection 2 further comment later
+schema_get_file_content = types.FunctionDeclaration(
+    name="get_file_content",
+    description="returns the content of a given file.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file": types.Schema(
+                type=types.Type.STRING,
+                description="A file that should be inside the working directory.",
+            ),
+        },
+    ),
+)
+
+def get_file_content(working_directory, file):
 
     #getting the absolute pathes for both inputs
     file_path = os.path.abspath(f"{working_directory}/{file}")
