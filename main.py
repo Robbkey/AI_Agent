@@ -18,6 +18,11 @@ def main():
     api_key = os.environ.get("GEMINI_API_KEY") # saving the api key
     client = genai.Client(api_key=api_key) # saving an instance of gemini with the api key 
 
+    iter = 0
+    input_tokens = 0
+    output_tokens = 0
+
+
 #-------------- 
 #system prompt to give overall instruction on how the llm should answer
     system_prompt = """
@@ -31,6 +36,8 @@ When a user asks a question or makes a request, make a function call plan. You c
 - Write or overwrite files
 
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
+Look at your input message and see if the result to the question is already given, if so you are done.
+When you are done list which functions you used, what results you got and the final result in a list.
 """
 #-------------- 
 
@@ -47,16 +54,63 @@ All paths you provide should be relative to the working directory. You do not ne
     
 
     if len(sys.argv) > 1: # checking if a user input was given
-        user_prompt = sys.argv[1] # saving the message part inside user_prompt. argv[0] is the filename
+        user_prompt = sys.argv[1] # saving the message part inside user_prompt. argv[0] is the filename      
+
         messages = [
             types.Content(role="user", parts=[types.Part (text=user_prompt)]),
-        ] # giving the user a role for later message history
-        response = client.models.generate_content(
-            model='gemini-2.0-flash-001', 
-            contents=messages,
-            config=types.GenerateContentConfig(
-                tools=[available_functions],system_instruction=system_prompt),
-        ) # saving the llm respons and declaring which model to use, config to give the llm a system prompt to act on and tools like functions it can use
+            ]
+
+        while iter < 20:
+
+            response = client.models.generate_content(
+                model='gemini-2.0-flash-001', 
+                contents=messages,
+                config=types.GenerateContentConfig(
+                    tools=[available_functions],system_instruction=system_prompt),
+            ) # saving the llm respons and declaring which model to use, config to give the llm a system prompt to act on and tools like functions it can use
+
+            input_tokens += response.usage_metadata.prompt_token_count
+            output_tokens += response.usage_metadata.candidates_token_count
+
+            for instance in response.candidates:
+                messages.append(instance.content)
+            #test1 = response.candidates[0].content.parts[0]
+            #print(f"this are the candidates: {messages}")
+
+            #lookig if a function was called by the llm
+            if response.function_calls != None :
+                #printing the input for each function
+                for func in response.function_calls:
+
+                    #calls a function that allows the llm to use a given function 
+                    result = call_function(*response.function_calls)
+                    
+                    #check if any respons was actually produced 
+                    if not result.parts[0].function_response.response:
+                        raise Exception("something has gone wrong")
+                    else:
+                        messages.append(types.Content(role="user", parts=[types.Part (text=str(result.parts[0].function_response.response))]))
+
+                    #print the result of the llm using a given function
+                    if len(sys.argv) > 2:
+                        if sys.argv[2] == "--verbose":
+                            print(f"-> {result.parts[0].function_response.response}")
+                            print("------------------------")
+                            print(messages)
+                            print("-------------------------")
+            else:
+                print("Response:")
+                print(response.text)
+                print("----------------------------------")
+                print("Prompt tokens:", response.usage_metadata.prompt_token_count)
+                print("Response tokens:", response.usage_metadata.candidates_token_count)
+                print("----------------------------------")
+                sys.exit(0)
+            
+            
+            iter += 1
+                    
+                    
 
     else:
         sys.exit(1) # programm exit when no input message is given
@@ -68,24 +122,7 @@ All paths you provide should be relative to the working directory. You do not ne
             print("----------------------------------")
             print("Prompt tokens:", response.usage_metadata.prompt_token_count)
             print("Response tokens:", response.usage_metadata.candidates_token_count)
-    print("----------------------------------")
-
-    #lookig if a function was called by the llm
-    if len(response.function_calls) > 0 :
-        #printing the input for each function
-        for func in response.function_calls:
-
-            #calls a function that allows the llm to use a given function 
-            result = call_function(*response.function_calls)
-
-            #check if any respons was actually produced 
-            if not result.parts[0].function_response.response:
-                raise Exception("something has gone wrong")
-
-            #print the result of the llm using a given function
-            if sys.argv[2] == "--verbose":
-                print(f"-> {result.parts[0].function_response.response}")
-
+        print("----------------------------------")
 
     #if no function was used just print the respons.text
     else:
@@ -104,8 +141,9 @@ def call_function(function_call_part, verbose=False):
     func_list = globals()
 
     #more or less detail
-    if sys.argv[2] == "--verbose":
-        print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+    if len(sys.argv) > 2: 
+        if sys.argv[2] == "--verbose":
+            print(f"Calling function: {function_call_part.name}({function_call_part.args})")
     else: 
         print(f" - Calling function: {function_call_part.name}")
 
